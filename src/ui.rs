@@ -1,7 +1,4 @@
-use druid::{
-    widget::{Button, Flex, Label, List},
-    Target, Widget, WidgetExt, WidgetPod,
-};
+use druid::{Target, Widget, WidgetExt, WidgetPod, widget::{Button, Flex, Label, List, Scroll}};
 
 use crate::{
     data::{DebugItem, DebuggerData, Event},
@@ -28,6 +25,7 @@ fn selector_page() -> impl Widget<()> {
 
 fn widget_page() -> impl Widget<DebugItem> {
     Flex::column()
+        .must_fill_main_axis(true)
         .with_child(
             Label::dynamic(|data: &DebugItem, _| data.name.clone())
                 .with_text_size(24.0)
@@ -36,9 +34,10 @@ fn widget_page() -> impl Widget<DebugItem> {
         .with_spacer(20.)
         .with_child(Label::new("Events").with_text_size(18.))
         .with_default_spacer()
-        .with_child(List::new(event).with_spacing(5.).lens(DebugItem::events))
+        .with_flex_child(Scroll::new(List::new(event).with_spacing(5.)).expand().lens(DebugItem::events), 1.0)
+        .padding(15.)
 }
 
 fn event() -> impl Widget<Event> {
-    Label::dynamic(|x, _| format!("{:?}", x))
+    Label::dynamic(|x: &Event, _| format!("{:?}", x.0))
 }

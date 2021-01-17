@@ -1,6 +1,11 @@
-use druid::{widget::prelude::*, Color, Widget, WidgetExt, WidgetPod};
+use std::mem;
 
-use crate::{data::DebuggerData, INSPECT, INSPECT_RESPONSE};
+use druid::{Color, Target, Widget, WidgetExt, WidgetPod, WindowId, im::Vector, widget::prelude::*};
+
+use crate::{
+    data::{self, DebugItem, DebuggerData},
+    EVENT, INSPECT, INSPECT_RESPONSE,
+};
 
 pub struct AppWrapper {
     pub inner: WidgetPod<DebuggerData, Box<dyn Widget<DebuggerData>>>,
@@ -9,7 +14,25 @@ pub struct AppWrapper {
 
 impl<T: Data> Widget<T> for AppWrapper {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, env: &Env) {
+        if let Event::Command(cmd) = event {
+            if let Some((widget_id, name)) = cmd.get(INSPECT_RESPONSE).cloned() {
+                self.data.item = Some(DebugItem {
+                    name,
+                    events: Vector::new(),
+                    widget_id,
+                });
+            }
+
+            if let (Some((_widget_id, event)), Some(item)) =
+                (cmd.get(EVENT).cloned(), &mut self.data.item)
+            {
+                item.events.push_back(data::Event(event));
+                ctx.children_changed();
+                // return;
+            }
+        }
         self.inner.event(ctx, event, &mut self.data, env);
+        ctx.request_update();
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &T, env: &Env) {
@@ -35,6 +58,7 @@ pub struct DebuggerWidget<T> {
     inner: Box<dyn Widget<T>>,
     is_selecting: bool,
     debug_name: String,
+    attached: bool,
 }
 
 impl<T: Data> DebuggerWidget<T> {
@@ -43,6 +67,7 @@ impl<T: Data> DebuggerWidget<T> {
             inner,
             debug_name,
             is_selecting: false,
+            attached: false,
         }
     }
 }
@@ -61,12 +86,26 @@ impl<T: Data> Widget<T> for DebuggerWidget<T> {
         };
         match event {
             Event::MouseDown(_) => ctx.set_active(true),
-            Event::MouseUp(_) if ctx.is_active() => {
+            Event::MouseUp(_) if ctx.is_active() && self.is_selecting => {
                 ctx.set_active(false);
-                ctx.submit_command(INSPECT_RESPONSE.with(ctx.widget_id()));
+                ctx.submit_command(
+                    INSPECT_RESPONSE
+                        .with((ctx.widget_id(), self.debug_name.clone()))
+                        .to(Target::Global),
+                );
+                self.attached = true;
                 return;
             }
             _ => {}
+        }
+
+        if self.attached {
+            ctx.submit_command(
+                EVENT
+                    .with((ctx.widget_id(), event.clone()))
+                    // totally not ashamed
+                    .to(Target::Window(unsafe { mem::transmute(2u64) })),
+            );
         }
         if !self.is_selecting || event.should_propagate_to_hidden() {
             self.inner.event(ctx, event, data, env);
