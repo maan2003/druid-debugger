@@ -97,6 +97,7 @@ impl<T: Data> Widget<T> for DebuggerWidget<T> {
     }
 }
 
+// Taken from runebender (https://github.com/linebender/runebender)
 use druid::widget::SizedBox;
 
 /// A widget that switches between two possible child views, for `Data` that
